@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulador de Sensores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+[hidden]{display:none!important}
+body{margin:0}
+/* Layout: painel de máquina — cena do sensor à esquerda, diagnóstico à direita; empilha no celular */
+:root{
+  --bg:#EDF0F2; --panel:#FFFFFF; --ink:#1A2228; --muted:#56636C; --line:#CDD5DB;
+  --accent:#9A6200; --accent-fill:#F2B233; --accent-ink:#2A1C00;
+  --ok:#1D7F46; --ok-bg:#E2F3E8; --warn:#9A5B00; --warn-bg:#FBEFD9; --bad:#B4322A; --bad-bg:#FBE3E1;
+  --scene:#E2E7EB; --steel:#8996A1; --steel-d:#5F6C76; --body:#3A444C; --lens:#22394D; --metal:#A9B4BD;
+  --box:#C9A06A; --box-d:#9E7646; --product:#7A4E2D; --dirt:#8A6A3E; --water:#3B8FD6; --refl:#D23B3B;
+  --led-off:#58626A; --led-g:#22C55E; --led-y:#FFB020; --mark:#E0302A;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11161A; --panel:#192026; --ink:#E5EAED; --muted:#98A5AE; --line:#2B353D;
+  --accent:#F2B233; --accent-fill:#F2B233; --accent-ink:#231700;
+  --ok:#53C686; --ok-bg:#15301F; --warn:#F0AA45; --warn-bg:#33260F; --bad:#F06B60; --bad-bg:#3A1A18;
+  --scene:#151C21; --steel:#5E6D79; --steel-d:#8695A1; --body:#2B343B; --lens:#3A6A8F; --metal:#7E8B95;
+  --box:#A88250; --box-d:#7C5C34; --product:#8B5E3A; --dirt:#A88552; --water:#5AA9EE; --refl:#E25A5A;
+  --led-off:#3C454C; --mark:#FF5A4F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161A; --panel:#192026; --ink:#E5EAED; --muted:#98A5AE; --line:#2B353D;
+  --accent:#F2B233; --accent-fill:#F2B233; --accent-ink:#231700;
+  --ok:#53C686; --ok-bg:#15301F; --warn:#F0AA45; --warn-bg:#33260F; --bad:#F06B60; --bad-bg:#3A1A18;
+  --scene:#151C21; --steel:#5E6D79; --steel-d:#8695A1; --body:#2B343B; --lens:#3A6A8F; --metal:#7E8B95;
+  --box:#A88250; --box-d:#7C5C34; --product:#8B5E3A; --dirt:#A88552; --water:#5AA9EE; --refl:#E25A5A;
+  --led-off:#3C454C; --mark:#FF5A4F; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:0 40px}
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding-block:18px 14px;border-bottom:1px solid var(--line);margin-bottom:22px}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto;cursor:pointer}
+.brand h1{font-family:var(--display);font-weight:700;font-size:30px;letter-spacing:.01em;margin:0;line-height:1}
+.brand span{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.seg button{font:500 14px var(--sans);color:var(--muted);background:none;border:0;padding:8px 14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent-fill);color:var(--accent-ink);font-weight:600}
+.score{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.score b{color:var(--ink);font-size:16px;font-variant-numeric:tabular-nums}
+button:focus-visible,.card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+h2{font-family:var(--display);font-weight:700;font-size:26px;line-height:1.1;margin:0 0 8px;text-wrap:balance}
+h3{font-family:var(--display);font-weight:600;font-size:20px;margin:0 0 8px;letter-spacing:.01em}
+p{margin:0 0 10px}
+.muted{color:var(--muted)}
+/* Home */
+.intro{display:grid;grid-template-columns:1.2fr 1fr;gap:24px;margin-bottom:26px;align-items:start}
+.intro>*{min-width:0}
+.steps{display:grid;gap:8px;margin:0;padding:0;list-style:none;counter-reset:s}
+.steps li{display:flex;gap:10px;align-items:flex-start;counter-increment:s}
+.steps li::before{content:counter(s);font:600 13px var(--mono);width:24px;height:24px;flex:none;border-radius:50%;border:1.5px solid var(--accent);color:var(--accent);display:grid;place-items:center}
+.modebox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.modebox dl{margin:0;display:grid;gap:8px}
+.modebox dt{font-weight:600}
+.modebox dd{margin:0;color:var(--muted);font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer;text-align:left;font:inherit;color:inherit;display:flex;flex-direction:column;gap:6px;transition:border-color .15s,transform .15s}
+.card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.card .t{font-family:var(--display);font-weight:600;font-size:20px;line-height:1.1}
+.card .d{color:var(--muted);font-size:14px}
+.card .n{font-family:var(--mono);font-size:12px;color:var(--accent);margin-top:auto}
+.card.feature{grid-column:1/-1;background:var(--accent-fill);border-color:var(--accent-fill);color:var(--accent-ink);flex-direction:row;align-items:center;flex-wrap:wrap;gap:6px 16px}
+.card.feature .d,.card.feature .n{color:var(--accent-ink)}
+.card.feature .t{font-size:24px}
+.best{font-family:var(--mono);font-size:12px;color:var(--muted)}
+/* Scenario */
+.sc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+.sc>*{min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.scene{background:var(--scene);border-radius:8px;overflow:hidden}
+.scene svg{display:block;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.toggle{display:flex;align-items:center;gap:10px;margin-top:12px;font-weight:500;cursor:pointer;user-select:none}
+.toggle input{position:absolute;opacity:0;width:1px;height:1px}
+.sw{width:44px;height:24px;border-radius:12px;background:var(--line);position:relative;flex:none;transition:background .15s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--panel);transition:left .15s}
+.toggle input:checked+.sw{background:var(--accent-fill)}
+.toggle input:checked+.sw::after{left:23px}
+.toggle input:focus-visible+.sw{outline:2px solid var(--accent);outline-offset:2px}
+.hmi{margin-top:12px;background:#0E1418;color:#D7E0E6;border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:13px;display:grid;gap:4px}
+.hmi .al{color:#FF7A6E;display:flex;gap:8px;align-items:flex-start}
+.hmi .al::before{content:"";width:8px;height:8px;border-radius:50%;background:#FF4D40;margin-top:6px;flex:none;animation:blink 1s steps(1) infinite}
+.hmi .io{color:#8FB3C9}
+.sym{border-left:3px solid var(--accent-fill);padding:2px 0 2px 12px;margin-bottom:16px}
+.insp{display:grid;gap:6px;margin-bottom:18px}
+.ib{display:block;width:100%;text-align:left;font:500 14px var(--sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 12px;cursor:pointer}
+.ib:hover{border-color:var(--accent)}
+.ib .lab{display:flex;justify-content:space-between;gap:10px}
+.ib .lab small{font-family:var(--mono);color:var(--muted);font-weight:400}
+.ib.done{background:var(--panel);cursor:default}
+.ib.done .lab{color:var(--muted)}
+.ib .f{display:block;margin-top:6px;font-weight:400;color:var(--ink);font-size:14px}
+.ib.tec .lab small{color:var(--accent)}
+.opts{display:grid;gap:8px}
+.op{width:100%;text-align:left;font:500 14.5px var(--sans);color:var(--ink);background:var(--panel);border:1.5px solid var(--line);border-radius:8px;padding:11px 13px;cursor:pointer}
+.op:hover:not(:disabled){border-color:var(--accent)}
+.op:disabled{cursor:default}
+.op.certo{border-color:var(--ok);background:var(--ok-bg)}
+.op.parcial{border-color:var(--warn);background:var(--warn-bg)}
+.op.errado{border-color:var(--bad);background:var(--bad-bg)}
+.op.inseguro{border-color:var(--bad);background:var(--bad-bg)}
+.op.dim{opacity:.55}
+.op .why{display:block;font-weight:400;font-size:13.5px;margin-top:6px}
+.tag{display:inline-block;font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:4px;margin-right:6px;vertical-align:1px}
+.tag.certo{background:var(--ok);color:var(--panel)}
+.tag.parcial{background:var(--warn);color:var(--panel)}
+.tag.errado,.tag.inseguro{background:var(--bad);color:var(--panel)}
+.fb{margin-top:16px;border-top:1px solid var(--line);padding-top:14px;display:grid;gap:10px}
+.fb dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px}
+.fb dt{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding-top:2px}
+.fb dd{margin:0}
+.pts{font-family:var(--mono);font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.btn{font:600 14.5px var(--sans);padding:10px 16px;border-radius:8px;border:1.5px solid var(--accent-fill);background:var(--accent-fill);color:var(--accent-ink);cursor:pointer}
+.btn.ghost{background:none;color:var(--ink);border-color:var(--line)}
+.prog{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.hint{font-size:13px;color:var(--muted);margin:-4px 0 10px}
+/* Result */
+.res{display:grid;gap:8px;margin:14px 0 18px;padding:0;list-style:none}
+.res li{display:flex;gap:10px;align-items:baseline;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 12px}
+.res li .p{margin-left:auto;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.big{font-family:var(--display);font-size:56px;font-weight:700;line-height:1}
+footer{margin-top:34px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
+.blink{animation:blink .45s steps(1) infinite}
+@keyframes blink{50%{opacity:.15}}
+.reveal{animation:pop .5s ease-out}
+@keyframes pop{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.blink,.hmi .al::before{animation:none;opacity:.6}.reveal{animation:none}.card{transition:none}}
+@media (max-width:860px){.sc,.intro{grid-template-columns:1fr}}
+@media (max-width:480px){.brand h1{font-size:25px}.fb dl{grid-template-columns:1fr}.big{font-size:44px}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand" id="home" role="link" tabindex="0"><h1>Simulador de Sensores</h1><span>Transferência AM · PM</span></div>
+    <div class="seg" role="group" aria-label="Nível">
+      <button type="button" id="m-op" aria-pressed="true">Operador</button>
+      <button type="button" id="m-tec" aria-pressed="false">Técnico</button>
+    </div>
+    <div class="score" id="score" hidden>Pontos <b id="pts">0</b></div>
+  </header>
+  <main id="app"></main>
+  <footer>Conteúdo de treinamento com cenários genéricos. Na linha, siga sempre a LPP do equipamento e os padrões de segurança da planta (NR-10, NR-12, bloqueio de energias).</footer>
+</div>
+
+<script>
+(function(){
+const TYPES = {
+  FD:{nome:"Fotoelétrico difuso", desc:"Detecta o produto pela luz que reflete nele.", on:"Produto em frente ao sensor", c:["com produto","sem produto"], lente:"Olhar a lente", lenteOk:"Lente limpa, sem riscos."},
+  FR:{nome:"Fotoelétrico retrorreflexivo", desc:"O feixe vai até um refletor; o produto interrompe o feixe.", on:"Produto entre sensor e refletor", c:["com produto","sem produto"], lente:"Olhar a lente e o refletor", lenteOk:"Lente e refletor limpos."},
+  IN:{nome:"Indutivo", desc:"Detecta metal sem contato, a poucos milímetros.", on:"Válvula atuada (alvo sob o sensor)", c:["válvula atuada","válvula em repouso"], lente:"Olhar a face sensora", lenteOk:"Face sensora limpa."},
+  CA:{nome:"Capacitivo", desc:"Detecta produto, pó ou líquido, inclusive através de parede plástica.", on:"Funil com nível alto", c:["nível alto","nível baixo"], lente:"Olhar a face do sensor", lenteOk:"Face do sensor limpa."},
+  US:{nome:"Ultrassônico", desc:"Mede distância pelo eco do som; usado em altura e nível.", on:"Pilha alta sob o sensor", c:["pilha alta","pilha baixa"], lente:"Olhar a face do transdutor", lenteOk:"Face do transdutor limpa e seca."},
+  SG:{nome:"Intertravamento de segurança", desc:"Garante que a máquina só parta com a proteção fechada (NR-12).", on:"Porta de proteção fechada", c:["porta fechada","porta aberta"], lente:"Olhar o atuador e a chave", lenteOk:"O atuador entra corretamente na cabeça da chave."}
+};
+const INSP_OP = [["led","Observar os LEDs"],["lente",null],["suporte","Verificar suporte e centerline"],["cabo","Verificar cabo e conector"],["teste","Fazer o teste funcional"]];
+const INSP_TEC = [["tensao","Medir alimentação no conector"],["sinal","Medir o sinal de saída"],["clp","Ver a entrada no CLP"],["modelo","Conferir modelo e especificação"]];
+
+const ON = (o)=>({pwr:1,out:o,plc:o});
+const S = [
+{id:"FD1",t:"FD",titulo:"Falta de caixa intermitente",alarme:"FALTA DE CAIXA – ENTRADA",
+ sintoma:"A encartuchadeira para várias vezes por hora com o alarme “Falta de caixa”, mas as caixas estão chegando normalmente.",
+ beh:p=>ON(p?"pisca":0), rev:{dirt:"lente"}, key:{op:"lente",tec:"lente"},
+ find:{lente:"Camada de pó de produto sobre a lente. Contra a luz dá para ver a sujeira.",teste:"Com a peça-padrão, a saída falha de vez em quando: o sinal está no limite."},
+ op:[["certo","Limpar a lente com pano macio e seco, fazer o teste funcional e registrar no CIL","A causa é sujeira, e a limpeza está na LPP do operador. O teste confirma que resolveu."],
+     ["errado","Aumentar a sensibilidade no potenciômetro do sensor","Ajuste de sensibilidade não é tarefa do operador e só esconde o problema: o sensor suja de novo e pode passar a detectar o fundo."],
+     ["errado","Limpar com jato de ar comprimido bem de perto","O ar espalha o pó e pode forçar sujeira e umidade para o conector. Use pano macio."],
+     ["parcial","Abrir etiqueta e esperar a manutenção","A etiqueta é bem-vinda, mas a limpeza é sua: a linha ficaria parada sem necessidade."]],
+ tec:[["certo","Limpar, testar e revisar com o operador a frequência de limpeza no CIL","Corrige a causa e ataca a recorrência: talvez a frequência precise aumentar ou o sensor precise de proteção contra pó."],
+      ["errado","Aumentar a sensibilidade para compensar a sujeira","Funciona por um tempo, mas reduz a margem contra o fundo, e a sujeira continua acumulando."],
+      ["errado","Trocar o sensor","O sensor está bom. A troca gasta peça e não resolve a causa."],
+      ["inseguro","Fazer bypass do sensor no CLP até a próxima parada","Bypass de sensor de processo pode gerar embalagem vazia, travamento e perda. Nunca sem análise e autorização formal."]],
+ causa:"Pó de produto na lente reduz a luz recebida; o sinal fica no limite e oscila.",
+ quem:"AM — limpeza da lente está na LPP do operador.",
+ prev:"Ajustar a frequência no CIL, avaliar capuz de proteção ou posição fora da nuvem de pó, foto OK/NOK no posto."},
+
+{id:"FD2",t:"FD",titulo:"Produto não detectado após impacto",alarme:"FALTA DE CAIXA – ENTRADA",
+ sintoma:"Depois de um enrosco de caixa na entrada, a máquina não reconhece mais nenhum produto: alarme “Falta de caixa” fixo.",
+ beh:p=>ON(0), rev:{mis:"suporte"}, key:{op:"suporte",tec:"suporte"},
+ find:{suporte:"O sensor está girado no suporte: o centerline (marca do corpo × marca do suporte) não coincide. Há marca de batida.",teste:"Com a peça-padrão na frente, a saída não muda."},
+ op:[["certo","Realinhar o sensor pelo centerline, reapertar, fazer o teste funcional e abrir etiqueta pelo impacto","Com centerline, o ajuste de posição é do operador. A etiqueta leva a manutenção a tratar a causa: o sensor está exposto a batidas."],
+     ["parcial","Abrir etiqueta e chamar a manutenção, sem mexer no sensor","Seguro, mas com centerline o realinhamento é seu. A linha ficaria parada sem necessidade."],
+     ["errado","Girar o sensor até o LED acender, sem olhar o centerline","Ajuste sem referência: pode acender com o fundo, ficar no limite e falhar de novo. Use sempre o centerline."],
+     ["errado","Aumentar a sensibilidade","Não é tarefa do operador e não corrige um sensor apontado para o lugar errado."]],
+ tec:[["certo","Conferir o realinhamento pelo centerline e eliminar a causa do impacto (guarda ou sensor recuado)","O realinhamento é AM; o ganho do técnico é impedir que a batida se repita."],
+      ["parcial","Girar até acender, sem usar o centerline","Volta a funcionar, mas fora do padrão. Pode ficar no limite."],
+      ["errado","Trocar o sensor","O sensor funciona. O problema é a posição."],
+      ["errado","Aumentar a sensibilidade","Compensa um desalinhamento com ganho e aumenta o risco de detectar o fundo."]],
+ causa:"A caixa enroscada bateu no sensor e o girou no suporte.",
+ quem:"AM — há centerline. PM trata a causa do impacto.",
+ prev:"Suporte rígido, centerline visível e proteção contra impacto (guarda ou sensor recuado)."},
+
+{id:"FD5",t:"FD",titulo:"Sensor desalinhado sem centerline",alarme:"FALTA DE CAIXA – ENTRADA",nocl:true,
+ sintoma:"Depois da troca de formato, o sensor de caixa passou a falhar de vez em quando. Cada turno ajusta de um jeito.",
+ beh:p=>ON(p?"pisca":0), rev:{mis:"suporte"}, key:{op:"suporte",tec:"suporte"},
+ find:{suporte:"O sensor está levemente girado e o suporte tem furo oblongo. Não existe centerline: nada indica a posição correta.",teste:"Com a peça-padrão, a saída falha em parte das tentativas."},
+ op:[["certo","Não ajustar por tentativa: abrir etiqueta, chamar a manutenção e pedir a criação do centerline","Sem centerline não há referência. O ajuste fica com a manutenção, que cria o centerline para que da próxima vez seja AM."],
+     ["errado","Girar o sensor até o LED acender e reapertar","Sem referência, cada pessoa ajusta num ponto diferente. É exatamente isso que gera a falha recorrente."],
+     ["errado","Copiar a olho a posição do sensor da outra linha","Linhas e formatos podem ter posições diferentes. A olho não é padrão."],
+     ["errado","Limpar a lente","A lente está limpa. A causa está na posição."]],
+ tec:[["certo","Ajustar com a peça-padrão, travar o suporte, criar o centerline (marca + foto) e atualizar a LPP","Corrige e transforma o ajuste em tarefa AM daqui para frente."],
+      ["parcial","Ajustar e reapertar sem criar o centerline","Resolve hoje, mas o próximo ajuste volta a ser na tentativa."],
+      ["errado","Trocar o sensor","O sensor está bom. Falta referência de posição."],
+      ["errado","Aumentar a sensibilidade","Esconde o desalinhamento e aumenta o risco de detectar o fundo."]],
+ causa:"Suporte com ajuste livre e sem centerline: a posição muda a cada intervenção.",
+ quem:"PM agora. Depois de criado o centerline, o ajuste passa a ser AM.",
+ prev:"Centerline em todo sensor ajustável (marca + foto na LPP), suporte travado e posição por formato quando houver troca de formato."},
+
+{id:"FD3",t:"FD",titulo:"Sensor apagado",alarme:"FALHA SENSOR DE CAIXA – B101",
+ sintoma:"A IHM mostra “Falha sensor de caixa” fixo e a máquina não parte.",
+ beh:p=>({pwr:0,out:0,plc:0}), rev:{cable:"cabo"}, key:{op:"cabo",tec:"tensao"},
+ find:{cabo:"Cabo esmagado na passagem sob a guia da esteira, com a capa rompida.",tensao:"0 V no conector do sensor. No borne do painel há 24,0 Vcc: o problema está no cabo."},
+ op:[["certo","Não mexer no cabo; abrir etiqueta e chamar a manutenção","Reparo de cabo é intervenção elétrica (NR-10). Seu papel foi encontrar e registrar."],
+     ["inseguro","Isolar o trecho rompido com fita isolante","Intervenção elétrica sem qualificação e emenda provisória. Fere a NR-10."],
+     ["errado","Limpar a lente","LED verde apagado indica falta de alimentação, não sujeira."],
+     ["errado","Reiniciar a máquina algumas vezes","O cabo continua rompido. Reiniciar só atrasa a chamada."]],
+ tec:[["certo","Substituir o cabo (M12 pré-montado), passar em trecho protegido e testar","Resolve e elimina o ponto de esmagamento."],
+      ["errado","Fazer emenda com fita e seguir","Emenda em área de lavagem vira ponto de umidade e falha intermitente."],
+      ["errado","Trocar o sensor","O sensor não recebe 24 V. Trocar não resolve."],
+      ["errado","Ligar o sensor em outra entrada do CLP","A falta de tensão está no cabo, não na entrada."]],
+ causa:"Cabo passando em área de esmagamento, sem proteção.",
+ quem:"PM (NR-10). AM detecta na inspeção visual do cabo.",
+ prev:"Cabo em eletrocalha ou espiral protetora, com folga e fixado; conector voltado para baixo; cabo no ponto de inspeção do CIL."},
+
+{id:"FD4",t:"FD",titulo:"Sensor novo, máquina não reconhece",alarme:"FALTA DE CAIXA – ENTRADA",
+ sintoma:"O sensor foi trocado ontem. Os LEDs funcionam, mas a máquina continua com “Falta de caixa”.",
+ beh:p=>({pwr:1,out:p?1:0,plc:0}), rev:{npn:"modelo"}, key:{op:"teste",tec:"modelo"},
+ find:{modelo:"Instalado: saída NPN. Especificado no desenho: PNP. A entrada do CLP espera PNP (fornece +24 V ao detectar).",
+       sinal:"A saída (fio preto) não fornece +24 V quando o LED amarelo acende: o sensor chaveia o negativo (NPN).",
+       teste:"O LED amarelo acende com a peça-padrão, mas a máquina continua sem reconhecer."},
+ op:[["certo","Chamar a manutenção informando que os LEDs respondem, mas a máquina não reconhece","Ótima informação para o técnico: o sensor detecta, então o problema está entre o sensor e o CLP."],
+     ["errado","Limpar a lente","O LED amarelo já acende com o produto: a detecção está funcionando."],
+     ["errado","Ajustar a sensibilidade","A detecção está ok. O sinal é que não chega à máquina."],
+     ["errado","Reapertar o conector com a mão","O LED verde aceso mostra que a alimentação está chegando."]],
+ tec:[["certo","Substituir por sensor PNP conforme especificado e corrigir o código no estoque","Corrige a causa e evita que o modelo errado volte a ser instalado."],
+      ["errado","Inverter os fios no conector","Não transforma NPN em PNP e pode danificar o sensor ou a entrada."],
+      ["errado","Trocar o cartão de entrada do CLP","O cartão está bom. A falha é o tipo de saída do sensor."],
+      ["inseguro","Forçar a entrada no CLP para a linha rodar","Forçar entrada esconde a detecção real e pode gerar travamento ou produto fora de padrão."]],
+ causa:"Sensor NPN instalado no lugar de PNP (modelos parecidos, código diferente).",
+ quem:"PM.",
+ prev:"Padronizar modelos por aplicação, etiqueta com o código do sensor no suporte, PNP e NPN separados no estoque."},
+
+{id:"FR1",t:"FR",titulo:"Esteira sempre cheia",alarme:"ESTEIRA DE ACÚMULO CHEIA",
+ sintoma:"A esteira de acúmulo indica “Esteira cheia” o tempo todo, mesmo vazia. A alimentação fica parada.",
+ beh:p=>ON(1), rev:{reflDirty:"lente"}, key:{op:"lente",tec:"lente"},
+ find:{lente:"A lente do sensor está limpa, mas o refletor está coberto por uma película de óleo e pó."},
+ op:[["certo","Limpar o refletor e a lente com pano macio, testar e registrar","No retrorreflexivo, “sem luz voltando” significa “produto presente”. Refletor sujo é presença falsa."],
+     ["errado","Girar o sensor até o LED apagar","Ajuste sem referência e fora do seu padrão. A causa é sujeira."],
+     ["parcial","Chamar a manutenção para trocar o sensor","A limpeza resolve. Chame a manutenção só se o problema continuar."],
+     ["inseguro","Desconectar o sensor para a esteira andar","Desligar sensor é bypass: a esteira pode encavalar produto e travar."]],
+ tec:[["certo","Limpar o refletor e incluí-lo no ponto do CIL (hoje só a lente está na LPP)","Resolve e fecha a lacuna do padrão: o refletor também precisa de cuidado."],
+      ["errado","Trocar o sensor","O sensor está bom."],
+      ["errado","Mudar a saída para o modo contrário (light-on)","Inverte a lógica da máquina e não resolve a sujeira."],
+      ["errado","Aumentar a sensibilidade","Compensa a sujeira por pouco tempo e reduz a confiabilidade."]],
+ causa:"Refletor sujo não devolve luz; o sensor entende como produto presente.",
+ quem:"AM.",
+ prev:"Refletor na LPP e na etiqueta do ponto de inspeção; proteção do refletor contra respingos."},
+
+{id:"FR2",t:"FR",titulo:"Esteira cheia após a higienização",alarme:"ESTEIRA DE ACÚMULO CHEIA",
+ sintoma:"Depois da higienização da linha, a esteira indica “Esteira cheia” o tempo todo.",
+ beh:p=>ON(1), rev:{reflMoved:"suporte"}, key:{op:"suporte",tec:"suporte"},
+ find:{suporte:"O suporte do refletor foi deslocado: está fora do centerline e o feixe não volta ao sensor."},
+ op:[["certo","Recolocar o refletor no centerline, fixar, testar e registrar","Com centerline, realinhar o refletor é tarefa do operador."],
+     ["parcial","Abrir etiqueta e chamar a manutenção","Seguro, mas o realinhamento pelo centerline é seu. A linha ficaria parada sem necessidade."],
+     ["errado","Mover o refletor até o LED apagar e prender com abraçadeira","Ignora o centerline e usa fixação improvisada. Vai soltar de novo."],
+     ["errado","Limpar a lente","Lente e refletor estão limpos. O problema é a posição."]],
+ tec:[["certo","Avaliar suporte encaixado para o refletor e combinar o cuidado com a equipe de higienização","O realinhamento é AM; o técnico ataca o motivo de o refletor sair do lugar."],
+      ["parcial","Realinhar sem usar o centerline","Funciona, mas fora do padrão que o operador usa."],
+      ["errado","Trocar o sensor","O sensor está bom."],
+      ["errado","Trocar por um sensor difuso","Muda a tecnologia sem analisar a aplicação. A causa é o suporte deslocado."]],
+ causa:"Refletor deslocado durante a higienização.",
+ quem:"AM — há centerline.",
+ prev:"Suporte de refletor rígido ou encaixado, centerline visível e cuidado registrado no procedimento de higienização."},
+
+{id:"FR3",t:"FR",titulo:"Embalagem nova, contagem falha",alarme:"DIVERGÊNCIA DE CONTAGEM",
+ sintoma:"Desde a troca para embalagem metalizada, alguns pacotes passam sem ser contados.",
+ beh:p=>ON(p?"pisca":0), rev:{}, key:{op:"teste",tec:"modelo"},
+ find:{modelo:"Retrorreflexivo sem filtro de polarização. O filme metalizado devolve a luz como se fosse o refletor.",
+       teste:"Com a peça-padrão (caixa de papelão) detecta sempre. Com o pacote metalizado, falha em parte das passagens."},
+ op:[["certo","Registrar a anomalia informando que só falha com o pacote metalizado e chamar a manutenção","Essa observação encurta muito o diagnóstico."],
+     ["errado","Limpar o refletor","O refletor está limpo, e com papelão funciona."],
+     ["errado","Inclinar o sensor","Não há centerline para outra posição. Inclinar por tentativa é ajuste sem padrão."],
+     ["errado","Reduzir a velocidade da linha por conta própria","Muda o processo sem análise e não resolve a causa."]],
+ tec:[["certo","Usar retrorreflexivo com filtro de polarização (ou sensor para objetos brilhantes) e validar com o pacote real","A tecnologia certa diferencia o refletor do brilho da embalagem."],
+      ["parcial","Inclinar o sensor 10–15° para reduzir o reflexo direto","Pode melhorar, mas é paliativo e depende da posição do pacote."],
+      ["errado","Aumentar a sensibilidade","Piora: o reflexo da embalagem fica ainda mais parecido com o refletor."],
+      ["errado","Trocar por um sensor igual","O sensor não está com defeito. O problema é a tecnologia."]],
+ causa:"O material brilhante devolve luz como o refletor; o sensor sem polarização não diferencia.",
+ quem:"PM / engenharia.",
+ prev:"Na mudança de embalagem, validar os sensores com o material novo (gestão de mudança)."},
+
+{id:"IN1",t:"IN",titulo:"Válvula atuou, posição não confirma",alarme:"VÁLVULA DV-12 NÃO CHEGOU À POSIÇÃO",
+ sintoma:"A IHM indica “Válvula não chegou à posição”, mas dá para ver que a válvula atuou.",
+ beh:p=>ON(0), rev:{far:"suporte"}, key:{op:"suporte",tec:"suporte"},
+ find:{suporte:"O sensor está recuado em relação ao centerline de distância: cerca de 6 mm até o alvo (o sensor M12 alcança 4 mm). A contraporca está solta."},
+ op:[["certo","Com a máquina parada e segura, voltar o sensor ao centerline, apertar a contraporca, testar e abrir etiqueta pela contraporca solta","Com centerline de distância, o ajuste é do operador. A etiqueta leva à causa: a vibração."],
+     ["parcial","Abrir etiqueta e chamar a manutenção","Seguro, mas o ajuste pelo centerline é seu."],
+     ["errado","Empurrar o sensor até encostar no alvo e apertar","Encostado, o alvo bate e destrói a face sensora."],
+     ["inseguro","Acionar a válvula manualmente para forçar a posição","Atuar manualmente com o sistema ligado expõe você a movimento inesperado."]],
+ tec:[["certo","Conferir o centerline (≈ 80% da nominal: até 3 mm) e aplicar trava na contraporca","Garante a margem certa no padrão e impede que a vibração solte de novo."],
+      ["parcial","Reposicionar sem travar a contraporca","Volta a funcionar, mas a vibração solta de novo."],
+      ["errado","Encostar o sensor no alvo","O alvo bate na face e danifica o sensor."],
+      ["errado","Trocar por um sensor de alcance maior","Não trata a causa: a contraporca solta continua soltando."]],
+ causa:"A vibração soltou a contraporca e o sensor recuou além do alcance.",
+ quem:"AM — há centerline de distância. PM trata a trava da contraporca.",
+ prev:"Contraporca travada, centerline de distância e inspeção no CIL."},
+
+{id:"IN2",t:"IN",titulo:"Posição sempre confirmada",alarme:"INCONSISTÊNCIA DE POSIÇÃO DV-12",
+ sintoma:"O sensor indica “válvula atuada” o tempo todo, mesmo com a válvula em repouso.",
+ beh:p=>ON(1), rev:{chips:"lente"}, key:{op:"lente",tec:"lente"},
+ find:{lente:"Partículas metálicas e graxa grudadas na face sensora."},
+ op:[["certo","Com a máquina parada e segura, limpar a face, testar e abrir etiqueta para a origem das partículas","Limpar resolve hoje; a etiqueta leva a manutenção à causa."],
+     ["parcial","Só limpar a face e seguir","Resolve hoje, mas partícula metálica é sintoma de desgaste em algum lugar. Abra etiqueta."],
+     ["errado","Chamar a manutenção para trocar o sensor","O sensor está bom. A face só está suja."],
+     ["inseguro","Limpar a face com a válvula em movimento","Mão perto de parte móvel energizada. Pare e bloqueie conforme o padrão."]],
+ tec:[["certo","Limpar, testar e investigar a origem das partículas (desgaste de came, acoplamento)","O sensor mostrou um problema mecânico. Esse é o ganho real."],
+      ["errado","Passar graxa na face para proteger","Graxa segura ainda mais partícula metálica."],
+      ["parcial","Instalar sensor com face inox sem investigar a origem","Melhora a robustez, mas o desgaste continua."],
+      ["errado","Trocar o sensor","O sensor está bom."]],
+ causa:"Partículas metálicas na face simulam a presença do alvo.",
+ quem:"Limpeza: AM. Investigação da origem: PM.",
+ prev:"Investigar o desgaste, proteger contra respingo de graxa, limpeza da face no CIL."},
+
+{id:"CA1",t:"CA",titulo:"Funil sempre cheio",alarme:"FUNIL F-03 CHEIO",
+ sintoma:"O funil para de receber produto. O sensor indica “Funil cheio”, mas o nível está baixo.",
+ beh:p=>ON(1), rev:{buildup:"lente"}, key:{op:"lente",tec:"lente"},
+ find:{lente:"Produto empastado grudado na face do sensor, por dentro do funil."},
+ op:[["certo","Com o equipamento parado e bloqueado conforme o padrão, limpar a face do sensor e testar","O capacitivo detecta qualquer material. Produto grudado significa “cheio”."],
+     ["inseguro","Pôr a mão dentro do funil com o equipamento ligado para raspar","Risco de prensamento. Sempre pare e bloqueie antes."],
+     ["errado","Ajustar a sensibilidade do sensor","Não é tarefa do operador, e o produto grudado continua lá."],
+     ["parcial","Chamar a manutenção","A limpeza está no padrão do operador. A linha ficaria parada sem necessidade."]],
+ tec:[["certo","Limpar e avaliar sensor com compensação de incrustação ou posição com mais fluxo","Resolve hoje e reduz a recorrência."],
+      ["parcial","Reduzir a sensibilidade","Pode deixar de detectar o produto real, e o acúmulo continua."],
+      ["errado","Trocar por um sensor igual","O novo vai acumular produto da mesma forma."],
+      ["inseguro","Fazer bypass do sensor de nível","Funil sem controle de nível transborda ou alimenta a seco."]],
+ causa:"Produto grudado na face; o capacitivo enxerga o material como nível alto.",
+ quem:"AM (limpeza conforme LPP, com bloqueio).",
+ prev:"Limpeza da face no CIL; sensor com compensação de incrustação; posição em que o fluxo limpa a face."},
+
+{id:"US1",t:"US",titulo:"Altura oscilando após higienização",alarme:"ALTURA DE PILHA INVÁLIDA",
+ sintoma:"Depois da higienização, a leitura de altura da pilha oscila e a máquina para com “Altura inválida”.",
+ beh:p=>ON("pisca"), rev:{drops:"lente"}, key:{op:"lente",tec:"lente"},
+ find:{lente:"Gotas de água e espuma de detergente na face do transdutor."},
+ op:[["certo","Secar a face com pano macio, sem pressionar a membrana, testar e registrar","As gotas distorcem o eco. Secar resolve."],
+     ["errado","Soprar com ar comprimido bem de perto","Pode danificar a membrana do transdutor."],
+     ["errado","Ajustar a janela de detecção","Não é tarefa do operador e não remove as gotas."],
+     ["parcial","Esperar secar sozinho","Talvez resolva, mas a linha fica parada à toa."]],
+ tec:[["certo","Secar, testar e revisar a higienização para proteger ou secar o sensor","Resolve e evita que se repita a cada limpeza."],
+      ["parcial","Aumentar o filtro (tempo de resposta)","Reduz a oscilação, mas esconde a causa e deixa a resposta lenta."],
+      ["errado","Trocar o sensor","O sensor está bom."],
+      ["errado","Ajustar a janela de detecção para ignorar as leituras ruins","Mascara o problema e pode aceitar altura errada."]],
+ causa:"Gotas e espuma na membrana distorcem o eco.",
+ quem:"AM.",
+ prev:"Etapa de secagem no procedimento de higienização ou capa de proteção durante a lavagem."},
+
+{id:"US2",t:"US",titulo:"Leitura errática só com pilha alta",alarme:"ALTURA DE PILHA INVÁLIDA",
+ sintoma:"Depois de uma intervenção, a leitura de altura fica errática, mas só quando a pilha está alta.",
+ beh:p=>ON(p?"pisca":0), rev:{close:"suporte"}, key:{op:"suporte",tec:"suporte"},
+ find:{suporte:"O sensor foi abaixado no suporte e está bem abaixo do centerline. Com a pilha alta, o produto fica a ~40 mm da face, e a zona cega do modelo é 60 mm."},
+ op:[["certo","Voltar o sensor à altura do centerline, reapertar e testar com a pilha máxima","Com centerline, o ajuste de altura é do operador."],
+     ["parcial","Abrir etiqueta e chamar a manutenção","Seguro, mas o ajuste pelo centerline é seu."],
+     ["errado","Secar a face do transdutor","A face está seca, e com pilha baixa funciona."],
+     ["errado","Ajustar a janela de detecção","Não é tarefa do operador e não resolve a zona cega."]],
+ tec:[["certo","Conferir se o centerline respeita a zona cega e incluir a zona cega na LPP","Garante que o padrão de posição seja tecnicamente correto."],
+      ["parcial","Reduzir a altura máxima da pilha","Contorna mudando o processo, sem corrigir a montagem."],
+      ["errado","Aumentar o filtro","Não existe medição válida dentro da zona cega para filtrar."],
+      ["errado","Trocar o sensor","O sensor está bom."]],
+ causa:"O produto entrou na zona cega: o sensor não mede ecos muito próximos.",
+ quem:"AM — há centerline de altura.",
+ prev:"Centerline de altura no suporte e na LPP, com a zona cega na especificação."},
+
+{id:"SG1",t:"SG",titulo:"Máquina não parte com a porta fechada",alarme:"PORTA DE PROTEÇÃO P2 ABERTA",
+ sintoma:"A IHM indica “Porta de proteção aberta” mesmo com a porta fechada. A máquina não parte.",
+ beh:p=>({pwr:1,out:0,plc:0}), rev:{door:"lente"}, key:{op:"lente",tec:"lente"},
+ find:{lente:"O atuador não entra totalmente na cabeça da chave: a porta está empenada e desceu alguns milímetros.",
+       suporte:"A chave está firme no batente. A porta fecha, mas está caída do lado do atuador.",
+       teste:"Abrindo e fechando a porta, a IHM continua indicando “porta aberta”.",
+       modelo:"Chave e atuador conforme o projeto da proteção."},
+ op:[["certo","Não forçar nem burlar: abrir etiqueta e chamar a manutenção","Dispositivo de segurança é sempre da manutenção. O operador só faz o teste de partida previsto."],
+     ["inseguro","Usar o atuador reserva para a máquina partir","Isso é burla de segurança (NR-12). A máquina rodaria sem proteção."],
+     ["errado","Bater a porta com força até a chave reconhecer","Pode danificar chave e atuador, e o desalinhamento continua."],
+     ["errado","Limpar a chave com pano","A chave não está suja. O problema é alinhamento."]],
+ tec:[["certo","Corrigir o alinhamento da porta e do atuador, testar a função de segurança e registrar","Com a porta aberta, a máquina precisa parar. Teste sempre antes de liberar."],
+      ["inseguro","Fazer jumper na entrada de segurança até a próxima parada","Elimina a proteção. Nunca, em nenhuma circunstância."],
+      ["parcial","Trocar a chave sem corrigir a porta","A chave nova vai sofrer o mesmo desalinhamento."],
+      ["inseguro","Aumentar o tempo de tolerância no relé de segurança","Altera a função de segurança sem análise de risco."]],
+ causa:"A porta empenada desalinhou o atuador da chave.",
+ quem:"Sempre PM. O operador só faz o teste de partida previsto no padrão.",
+ prev:"Batente ou guia na porta, alinhamento na preventiva e atuador reserva sob controle da manutenção."}
+];
+
+const PTS = {certo:10,parcial:5,errado:0,inseguro:-5};
+const VERD = {certo:"Correto",parcial:"Parcial",errado:"Incorreto",inseguro:"Inseguro"};
+let mode = "op";
+try{ const m = localStorage.getItem("sim-mode"); if(m==="op"||m==="tec") mode = m; }catch(e){}
+let run = null;
+const $ = s=>document.querySelector(s);
+const app = $("#app");
+
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function bestKey(pool){return "sim-best-"+mode+"-"+pool;}
+function getBest(pool){try{const v=localStorage.getItem(bestKey(pool));return v==null?null:JSON.parse(v);}catch(e){return null;}}
+function setBest(pool,v){try{localStorage.setItem(bestKey(pool),JSON.stringify(v));}catch(e){}}
+
+function setMode(m){
+  mode=m;
+  $("#m-op").setAttribute("aria-pressed",m==="op");
+  $("#m-tec").setAttribute("aria-pressed",m==="tec");
+  try{localStorage.setItem("sim-mode",m);}catch(e){}
+  home();
+}
+$("#m-op").onclick=()=>setMode("op");
+$("#m-tec").onclick=()=>setMode("tec");
+$("#home").onclick=home;
+$("#home").onkeydown=e=>{if(e.key==="Enter")home();};
+
+/* ---------- Home ---------- */
+function home(){
+  run=null; $("#score").hidden=true;
+  const modeTxt = mode==="op"
+    ? "Você é o <b>operador</b>: inspecione com os sentidos e decida entre o que está na sua LPP e quando parar e chamar a manutenção."
+    : "Você é o <b>técnico</b>: além da inspeção, use multímetro, CLP e especificação para achar a causa e evitar que ela volte.";
+  let cards = `<button class="card feature" data-pool="ALL"><span class="t">Desafio geral</span><span class="d">8 cenários sorteados entre todos os sensores</span>${bestTxt("ALL")}</button>`;
+  for(const k in TYPES){
+    const n=S.filter(s=>s.t===k).length;
+    cards+=`<button class="card" data-pool="${k}"><span class="t">${TYPES[k].nome}</span><span class="d">${TYPES[k].desc}</span><span class="n">${n} ${n>1?"cenários":"cenário"}</span>${bestTxt(k)}</button>`;
+  }
+  app.innerHTML = `
+  <section class="intro">
+    <div>
+      <p class="eyebrow">Como funciona</p>
+      <h2>A máquina parou. O que o sensor está dizendo?</h2>
+      <ol class="steps">
+        <li><span>Leia o sintoma e observe a cena: LED verde é alimentação, LED amarelo é saída.</span></li>
+        <li><span>Inspecione. Cada inspeção revela um achado, e encontrar a pista-chave antes de decidir vale +2.</span></li>
+        <li><span>Escolha a ação e veja a causa, quem deve fazer (AM ou PM) e como evitar a recorrência.</span></li>
+      </ol>
+    </div>
+    <div class="modebox">
+      <p class="eyebrow">Nível ${mode==="op"?"operador":"técnico"}</p>
+      <p style="margin:0 0 10px">${modeTxt}</p>
+      <dl>
+        <dt>Pontuação</dt><dd>Correto +10 · Parcial +5 · Incorreto 0 · Inseguro −5 · Pista-chave +2</dd>
+      </dl>
+    </div>
+  </section>
+  <p class="eyebrow">Escolha um sensor</p>
+  <div class="grid">${cards}</div>`;
+  app.querySelectorAll(".card").forEach(b=>b.onclick=()=>start(b.dataset.pool));
+}
+function bestTxt(pool){const b=getBest(pool);return b?`<span class="best">Melhor: ${b.p} de ${b.max} pts</span>`:"";}
+
+/* ---------- Run ---------- */
+function start(pool){
+  let list = pool==="ALL" ? shuffle(S).slice(0,8) : shuffle(S.filter(s=>s.t===pool));
+  run={pool,list,i:0,pts:0,log:[]};
+  $("#score").hidden=false; $("#pts").textContent=0;
+  scenario();
+}
+
+function scenario(){
+  const sc=run.list[run.i], T=TYPES[sc.t];
+  const st={present:false,seen:{},answered:false,keyFound:false};
+  const insp = INSP_OP.map(([k,l])=>[k,l||T.lente,false]).concat(mode==="tec"?INSP_TEC.map(([k,l])=>[k,l,true]):[]);
+  const opts = shuffle(sc[mode]);
+  app.innerHTML = `
+  <div class="row" style="margin-bottom:12px">
+    <span class="prog">Cenário ${run.i+1} de ${run.list.length} · ${T.nome}</span>
+    <button class="btn ghost" id="quit" type="button">Sair</button>
+  </div>
+  <div class="sc">
+    <div class="panel">
+      <div class="scene" id="scene"></div>
+      <div class="legend"><span><i style="background:var(--led-g)"></i>Alimentação</span><span><i style="background:var(--led-y)"></i>Saída (detecção)</span><span><i style="background:var(--mark)"></i>Centerline</span></div>
+      <label class="toggle" for="pres"><input type="checkbox" id="pres"><span class="sw"></span><span>${T.on}</span></label>
+      <div class="hmi"><div class="al">${sc.alarme}</div><div class="io" id="io"></div></div>
+    </div>
+    <div class="panel">
+      <p class="eyebrow">Sintoma</p>
+      <h2>${sc.titulo}</h2>
+      <div class="sym">${sc.sintoma}</div>
+      <p class="eyebrow">Inspecionar</p>
+      <div class="insp" id="insp">${insp.map(([k,l,tec])=>`<button type="button" class="ib${tec?" tec":""}" data-k="${k}"><span class="lab">${l}<small>${tec?"técnico":"ver"}</small></span></button>`).join("")}</div>
+      <p class="eyebrow">Decidir</p>
+      <p class="hint">Qual é a ação certa ${mode==="op"?"para o operador":"para o técnico"}?</p>
+      <div class="opts" id="opts">${opts.map((o,i)=>`<button type="button" class="op" data-i="${i}">${o[1]}</button>`).join("")}</div>
+      <div id="fb"></div>
+    </div>
+  </div>`;
+  $("#quit").onclick=home;
+  const draw=()=>{
+    const b=sc.beh(st.present);
+    $("#scene").innerHTML=scene(sc,b,st);
+    const showIO = mode==="tec" && st.seen.clp;
+    $("#io").textContent = showIO ? `Entrada CLP: ${b.plc==="pisca"?"0/1 alternando":b.plc}` : (mode==="tec"?"Entrada CLP: (não verificada)":"");
+    $("#io").hidden = mode!=="tec";
+  };
+  $("#pres").onchange=e=>{st.present=e.target.checked;draw();};
+  app.querySelectorAll(".ib").forEach(btn=>btn.onclick=()=>{
+    const k=btn.dataset.k; if(st.seen[k]) return;
+    st.seen[k]=true;
+    if(!st.answered && sc.key[mode]===k) st.keyFound=true;
+    btn.classList.add("done");
+    btn.insertAdjacentHTML("beforeend",`<span class="f reveal">${finding(sc,k)}</span>`);
+    draw();
+  });
+  app.querySelectorAll(".op").forEach(btn=>btn.onclick=()=>{
+    if(st.answered) return; st.answered=true;
+    const o=opts[+btn.dataset.i], v=o[0];
+    const bonus = (v==="certo" && st.keyFound)?2:0;
+    const gained = PTS[v]+bonus;
+    run.pts+=gained; $("#pts").textContent=run.pts;
+    run.log.push({t:sc.titulo,v,p:gained});
+    app.querySelectorAll(".op").forEach((b,i)=>{
+      b.disabled=true;
+      const oo=opts[i];
+      if(b===btn){b.classList.add(v);b.insertAdjacentHTML("beforeend",`<span class="why"><span class="tag ${v}">${VERD[v]}</span>${o[2]}</span>`);}
+      else if(oo[0]==="certo"){b.classList.add("certo");b.insertAdjacentHTML("beforeend",`<span class="why"><span class="tag certo">Correto</span>${oo[2]}</span>`);}
+      else b.classList.add("dim");
+    });
+    const last = run.i===run.list.length-1;
+    $("#fb").innerHTML=`<div class="fb reveal">
+      <dl><dt>Causa</dt><dd>${sc.causa}</dd><dt>Quem faz</dt><dd>${sc.quem}</dd><dt>Prevenção</dt><dd>${sc.prev}</dd></dl>
+      <div class="row"><span class="pts">${gained>=0?"+":""}${gained} pts${bonus?" (inclui +2 pela pista-chave)":(v==="certo"&&!st.keyFound?" · inspecionar a pista-chave antes valeria +2":"")}</span>
+      <button class="btn" id="next" type="button">${last?"Ver resultado":"Próximo cenário"}</button></div></div>`;
+    $("#next").onclick=()=>{run.i++; if(run.i>=run.list.length) result(); else {scenario(); window.scrollTo({top:0});}};
+    $("#next").focus({preventScroll:true});
+  });
+  draw();
+}
+
+function result(){
+  const max=run.list.length*12, pct=Math.max(0,Math.round(run.pts/max*100));
+  const prev=getBest(run.pool);
+  if(!prev||run.pts>prev.p) setBest(run.pool,{p:run.pts,max});
+  const msg = pct>=85?"Excelente. Você separa bem o que é do operador e o que é da manutenção.":pct>=60?"Bom resultado. Reveja os cenários marcados para fechar as lacunas.":"Vale repetir: leia a causa e o “quem faz” de cada cenário.";
+  const nome = run.pool==="ALL"?"Desafio geral":TYPES[run.pool].nome;
+  app.innerHTML=`<div class="panel">
+    <p class="eyebrow">Resultado · ${nome} · nível ${mode==="op"?"operador":"técnico"}</p>
+    <div class="row" style="justify-content:flex-start;gap:18px"><span class="big">${run.pts}</span><span class="muted">de ${max} pontos possíveis<br>${msg}</span></div>
+    <ul class="res">${run.log.map(l=>`<li><span class="tag ${l.v}">${VERD[l.v]}</span><span>${l.t}</span><span class="p">${l.p>=0?"+":""}${l.p}</span></li>`).join("")}</ul>
+    <div class="row" style="justify-content:flex-start"><button class="btn" id="again" type="button">Jogar de novo</button><button class="btn ghost" id="back" type="button">Escolher outro sensor</button></div>
+  </div>`;
+  const pool=run.pool;
+  $("#again").onclick=()=>start(pool);
+  $("#back").onclick=home;
+}
+
+/* ---------- Findings ---------- */
+function finding(sc,k){
+  if(sc.find[k]) return sc.find[k];
+  const T=TYPES[sc.t], b1=sc.beh(true), b0=sc.beh(false), [c1,c0]=T.c;
+  const d=o=>o===1?"aceso":o===0?"apagado":"piscando";
+  const v=o=>o===1?"≈ 24 V":o===0?"0 V":"oscila entre 0 e 24 V";
+  const s=o=>o===1?"presente":o===0?"ausente":"intermitente";
+  switch(k){
+    case "led": return `Verde (alimentação): ${d(b1.pwr)}. Amarelo (saída): ${c1} → ${d(b1.out)}; ${c0} → ${d(b0.out)}.`;
+    case "lente": return T.lenteOk;
+    case "suporte": return "Suporte firme e sensor no centerline.";
+    case "cabo": return "Cabo íntegro, conector rosqueado até o fim, sem umidade.";
+    case "teste": return `Sinal na máquina: ${c1} → ${s(b1.plc)}; ${c0} → ${s(b0.plc)}.`;
+    case "tensao": return b1.pwr?"24,1 Vcc entre marrom (+) e azul (−) no conector do sensor.":"0 V no conector do sensor.";
+    case "sinal": return `Saída (fio preto): ${c1} → ${v(b1.out)}; ${c0} → ${v(b0.out)}.`;
+    case "clp": return `Entrada no CLP: ${c1} → ${b1.plc==="pisca"?"alternando 0/1":b1.plc}; ${c0} → ${b0.plc==="pisca"?"alternando 0/1":b0.plc}.`;
+    case "modelo": return "Modelo conforme especificação: saída PNP, alcance e tecnologia adequados à aplicação.";
+  }
+  return "";
+}
+
+/* ---------- Scene drawing ---------- */
+function on(sc,st,flag){const k=sc.rev[flag];return !!k && !!st.seen[k];}
+function led(cx,cy,state,color){
+  const f=state===0?"var(--led-off)":color;
+  return `<circle cx="${cx}" cy="${cy}" r="3.6" fill="${f}" class="${state==="pisca"?"blink":""}" stroke="rgba(0,0,0,.35)" stroke-width=".8"/>`;
+}
+function sensor(o){
+  // body points to +x, lens at x=0; LEDs near the back
+  const {x,y,rot=0,len=60,th=22,b,cyl=false,extra=""}=o;
+  let g=`<g transform="translate(${x} ${y}) rotate(${rot})">`;
+  g+=`<path d="M${-len-6} 0 C ${-len-30} 0, ${-len-26} 34, ${-len-56} 38" fill="none" stroke="var(--body)" stroke-width="4" stroke-linecap="round"/>`;
+  g+=`<rect x="${-len-9}" y="-5" width="10" height="10" rx="2" fill="var(--steel-d)"/>`;
+  if(o.cable) g+=`<g class="reveal"><path d="M${-len-26} 13 l5 6 l5 -6 l5 6" fill="none" stroke="var(--mark)" stroke-width="2.4"/><circle cx="${-len-18}" cy="16" r="9" fill="none" stroke="var(--mark)" stroke-width="1.6" stroke-dasharray="3 2"/></g>`;
+  g+=`<rect x="${-len}" y="${-th/2}" width="${len}" height="${th}" rx="${cyl?3:4}" fill="var(--body)"/>`;
+  if(cyl){for(let i=8;i<len-14;i+=4)g+=`<line x1="${-len+i}" y1="${-th/2}" x2="${-len+i}" y2="${th/2}" stroke="rgba(255,255,255,.08)" stroke-width="1.4"/>`;}
+  g+=`<rect x="-4" y="${-th/2+2}" width="6" height="${th-4}" rx="2" fill="var(--lens)"/>`;
+  g+=led(-len+9,-th/2+6,b.pwr,"var(--led-g)")+led(-len+19,-th/2+6,b.out,"var(--led-y)");
+  if(!o.nocl) g+=`<rect x="${-len/2-1}" y="${th/2-5}" width="3" height="5" fill="var(--mark)"/>`;
+  g+=extra+`</g>`;
+  return g;
+}
+function conveyor(){
+  let s=`<rect x="14" y="172" width="372" height="10" rx="3" fill="var(--steel)"/>`;
+  for(let x=30;x<380;x+=38)s+=`<circle cx="${x}" cy="186" r="5" fill="var(--steel-d)"/>`;
+  s+=`<rect x="20" y="190" width="6" height="26" fill="var(--steel-d)"/><rect x="374" y="190" width="6" height="26" fill="var(--steel-d)"/>`;
+  return s;
+}
+function box(x,y,w,h,metal){
+  return `<g class="reveal"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="${metal?"url(#met)":"var(--box)"}" stroke="${metal?"var(--steel-d)":"var(--box-d)"}"/><rect x="${x+w/2-5}" y="${y}" width="10" height="${h}" fill="${metal?"rgba(255,255,255,.25)":"var(--box-d)"}" opacity=".55"/></g>`;
+}
+function dirtFx(kind){
+  if(kind==="dirt")return `<g class="reveal"><circle cx="1" cy="-5" r="3.2" fill="var(--dirt)"/><circle cx="2" cy="3" r="4" fill="var(--dirt)"/><circle cx="-1" cy="7" r="2.4" fill="var(--dirt)"/><circle cx="3" cy="-1" r="2" fill="var(--dirt)"/></g>`;
+  if(kind==="chips")return `<g class="reveal">${[[-6,1],[-5,-5],[-6,6],[-4,-1],[-5,3]].map(([a,c])=>`<rect x="${-a-2}" y="${c-1}" width="3" height="2.2" fill="var(--steel-d)" transform="rotate(${a*13} ${-a} ${c})"/>`).join("")}<ellipse cx="3" cy="0" rx="3" ry="8" fill="var(--dirt)" opacity=".55"/></g>`;
+  if(kind==="buildup")return `<path class="reveal" d="M0 -12 C 9 -10, 12 -2, 8 4 C 12 9, 6 14, 0 12 Z" fill="var(--product)"/>`;
+  if(kind==="drops")return `<g class="reveal">${[[3,-6],[4,1],[2,6],[5,-2]].map(([a,c])=>`<circle cx="${a}" cy="${c}" r="2.4" fill="var(--water)" opacity=".85"/>`).join("")}</g>`;
+  return "";
+}
+function scene(sc,b,st){
+  const p=st.present, t=sc.t;
+  const vb=(t==="FD"||t==="FR")?"0 92 400 132":"0 0 400 230";
+  let s=`<svg viewBox="${vb}" role="img" aria-label="Cena do sensor"><defs><linearGradient id="met" x1="0" x2="1"><stop offset="0" stop-color="#9AA6B0"/><stop offset=".5" stop-color="#E6ECF0"/><stop offset="1" stop-color="#8A96A0"/></linearGradient></defs>`;
+  if(t==="FD"||t==="FR"){
+    s+=conveyor();
+    if(p) s+=box(180,118,74,54,sc.id==="FR3");
+    const mis=on(sc,st,"mis");
+    // bracket
+    s+=`<rect x="78" y="155" width="8" height="38" fill="var(--steel-d)"/><rect x="58" y="153" width="62" height="5" fill="var(--steel-d)"/>`+(sc.nocl?`<rect x="70" y="154" width="22" height="3" rx="1.5" fill="var(--scene)"/>`:`<rect x="89" y="153" width="3" height="5" fill="var(--mark)"/>`);
+    const extra = on(sc,st,"dirt")?dirtFx("dirt"):"";
+    const npn = on(sc,st,"npn")?`<g class="reveal"><rect x="-44" y="-26" width="34" height="13" rx="2" fill="var(--mark)"/><text x="-27" y="-16.5" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#fff">NPN</text></g>`:"";
+    s+=sensor({x:120,y:141,rot:mis?(sc.nocl?-6:-11):0,b,extra:extra+npn,cable:on(sc,st,"cable"),nocl:sc.nocl});
+    if(t==="FR"){
+      const moved=on(sc,st,"reflMoved");
+      s+=`<rect x="356" y="${moved?150:146}" width="5" height="47" fill="var(--steel-d)"/>`;
+      s+=`<g ${moved?'class="reveal" transform="translate(0 24) rotate(18 352 141)"':""}><rect x="344" y="126" width="12" height="30" rx="2" fill="var(--refl)"/>`;
+      for(let yy=129;yy<154;yy+=5)s+=`<path d="M346 ${yy} l4 2.5 l4 -2.5" stroke="rgba(255,255,255,.55)" fill="none" stroke-width=".9"/>`;
+      if(on(sc,st,"reflDirty"))s+=`<rect class="reveal" x="344" y="126" width="12" height="30" rx="2" fill="var(--dirt)" opacity=".8"/>`;
+      s+=`</g>`;
+      if(moved)s+=`<rect class="reveal" x="352" y="${143}" width="3" height="5" fill="var(--mark)"/>`;
+    }
+  } else if(t==="IN"){
+    const far=on(sc,st,"far");
+    s+=`<rect x="140" y="22" width="150" height="9" rx="2" fill="var(--steel-d)"/><rect x="200" y="31" width="20" height="${far?20:32}" fill="var(--steel-d)"/>`;
+    const tipY = far?86:98;
+    s+=sensor({x:210,y:tipY,rot:90,len:52,th:18,b,cyl:true,extra:on(sc,st,"chips")?dirtFx("chips"):""});
+    const tx=p?190:262;
+    s+=`<rect x="150" y="160" width="160" height="40" rx="4" fill="var(--steel)"/><rect x="${tx+16}" y="112" width="8" height="48" fill="var(--steel-d)"/>`;
+    s+=`<rect x="${tx}" y="104" width="40" height="8" rx="1" fill="url(#met)" stroke="var(--steel-d)"/>`;
+    if(far&&p) s+=`<g class="reveal"><line x1="232" y1="${tipY}" x2="232" y2="104" stroke="var(--mark)" stroke-width="1.4"/><text x="238" y="${(tipY+104)/2+4}" font-family="IBM Plex Mono,monospace" font-size="11" fill="var(--mark)">6 mm</text></g>`;
+    s+=`<text x="230" y="186" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="var(--panel)">DV-12</text>`;
+  } else if(t==="CA"){
+    const L=p?52:128, lx=110+(L-30)*50/120, rx=290-(L-30)*50/120;
+    s+=`<polygon points="${lx},${L} ${rx},${L} 240,150 160,150" fill="var(--product)" opacity=".9"/>`;
+    s+=`<polygon points="110,30 290,30 240,150 160,150" fill="none" stroke="var(--steel-d)" stroke-width="5" stroke-linejoin="round"/><rect x="186" y="150" width="28" height="40" fill="none" stroke="var(--steel-d)" stroke-width="5"/>`;
+    s+=sensor({x:134,y:84,rot:22,len:46,th:18,b,cyl:true,extra:on(sc,st,"buildup")?dirtFx("buildup"):""});
+    s+=`<text x="200" y="22" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="var(--muted)">F-03</text>`;
+  } else if(t==="US"){
+    s+=conveyor();
+    const close=on(sc,st,"close");
+    const tip = close?96:56;
+    s+=`<rect x="150" y="14" width="140" height="8" rx="2" fill="var(--steel-d)"/><rect x="212" y="22" width="16" height="${tip-50}" fill="var(--steel-d)"/>`;
+    if(close) s+=`<g class="reveal"><line x1="232" y1="56" x2="258" y2="56" stroke="var(--mark)" stroke-width="3"/><text x="262" y="60" font-family="IBM Plex Mono,monospace" font-size="10" fill="var(--mark)">centerline</text></g>`;
+    s+=sensor({x:220,y:tip,rot:90,len:30,th:30,b,cyl:true,extra:on(sc,st,"drops")?dirtFx("drops"):""});
+    for(let i=1;i<=2;i++)s+=`<path d="M${220-8*i} ${tip+6+7*i} q ${8*i} ${6} ${16*i} 0" fill="none" stroke="var(--muted)" stroke-width="1.2" opacity="${.7-i*.2}"/>`;
+    const n=p?3:1; for(let i=0;i<n;i++) s+=box(184,172-26*(i+1),72,25);
+  } else if(t==="SG"){
+    const mis=on(sc,st,"door");
+    s+=`<rect x="56" y="24" width="288" height="176" rx="4" fill="none" stroke="var(--steel-d)" stroke-width="6"/>`;
+    s+=`<rect x="306" y="88" width="30" height="40" rx="3" fill="#E8B400" stroke="var(--steel-d)"/><rect x="300" y="100" width="8" height="12" fill="var(--body)"/>`;
+    s+=led(321,98,b.pwr,"var(--led-g)")+led(321,108,b.out,"var(--led-y)");
+    if(p){
+      const dy=mis?6:0;
+      s+=`<g transform="translate(0 ${dy})"><rect x="72" y="38" width="226" height="150" rx="3" fill="var(--steel)" opacity=".55" stroke="var(--steel-d)" stroke-width="3"/><rect x="92" y="56" width="186" height="80" fill="var(--scene)" opacity=".7"/>`;
+      s+=`<rect x="288" y="${102}" width="14" height="8" fill="var(--body)"/></g>`;
+      if(mis) s+=`<circle class="reveal" cx="302" cy="${112}" r="13" fill="none" stroke="var(--mark)" stroke-width="2" stroke-dasharray="4 3"/>`;
+    } else {
+      s+=`<polygon points="72,38 108,58 108,170 72,188" fill="var(--steel)" opacity=".55" stroke="var(--steel-d)" stroke-width="3"/>`;
+    }
+    s+=`<text x="200" y="216" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="var(--muted)">PORTA P2</text>`;
+  }
+  return s+`</svg>`;
+}
+
+setMode(mode);
+})();
+</script>
+
+</body>
+</html>
